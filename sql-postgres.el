@@ -185,7 +185,7 @@ is it?"
 (add-hook
  'sql-mode-hook
  (lambda ()
-   (sql-highlist-postgres-keywords)
+   (sql-highlight-postgres-keywords)
    (setq indent-line-function 'sql-postgres-indent)))
 
 ;;; sql-postgres.el ends here
