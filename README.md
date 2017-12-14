@@ -21,7 +21,7 @@ This is a list of examples.
 
 This is just a function and everything works with that:
 
-```
+```plpgsql
 CREATE OR REPLACE FUNCTION schema_init () RETURNS void AS $$
 begin
     -- This is needed to stop crystal's pg lib barfing on the output
@@ -47,7 +47,7 @@ $$ LANGUAGE plpgsql;
 Ifs are a bit of a problem because of `elsif`. I am minded not to fix
 this bug and just accept that one needs a newline before the `elsif`:
 
-```
+```plpgsql
 CREATE OR REPLACE FUNCTION wiki_materialize () RETURNS trigger AS $$
 begin
     -- we should never have a delete
