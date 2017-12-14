@@ -105,7 +105,11 @@
 
 (defun sql-postgres-struct-begins (limit-point)
   "Find where things begin in the current function before LIMIT-POINT."
-  (let ((regex "^[ \t]*\\(begin\\|if[ \t]+.*[ \t]+then\\)$"))
+  (let ((regex
+	 (concat
+	  "^[ \t]*\\(begin"
+	  "\\|if[ \t]+.*[ \t]+then"
+	  "\\|elsif[ \t]+.*[ \t]then\\|else\\)$")))
     (save-excursion
       (let (results
 	    (begin-pt
@@ -118,15 +122,20 @@
 
 (defun sql-postgres-struct-ends (limit-point)
   "Find where structs end in the current function before LIMIT-POINT."
-  (let ((regex "^[ \t]*\\(end\\|end[ \t]+if\\);$"))
+  (let ((regex
+	 (concat
+	  "^[ \t]*\\(\\(end\\|end if\\);"
+	  "\\|elsif[ \t]+.*[ \t]+then\\\|else\\)$")))
     (save-excursion
       (let (results
 	    (end-pt
 	     (re-search-backward regex limit-point t)))
 	(while end-pt
-	  (setq results (append results (list end-pt)))
-	  (setq end-pt
-		(re-search-backward regex limit-point t)))
+	  (if (string-match "^[ \t]+\\(elsif .*\\|else\\)" (match-string 0))
+	      (setq results (append results (list (- end-pt 1))))
+	    ;; else
+	    (setq results (append results (list end-pt))))
+	  (setq end-pt (re-search-backward regex limit-point t)))
 	(mapcar (lambda (r) (cons :end r)) results)))))
 
 (defun sql-postgres-list-structure ()
