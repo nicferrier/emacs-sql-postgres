@@ -37,7 +37,7 @@
        ;; the arguments - this is no args
        "+[ \t\r\n]*([^)]*)"
        ;; options return type
-       "\\([ \t\n\r]+ RETURNS [A-Za-z_-]+\\)*"
+       "\\([ \t\n\r]+RETURNS[ \t\r\n]+[A-Za-z_-]+\\)*"
        ;; AS block quote - the block quote could actually be anything between two $
        "[ \r\n\t]+AS \\$\\$")
       nil
@@ -45,6 +45,7 @@
      (match-end 0))))
 
 (defun sql-postgres-in-pl-p ()
+  "Is POINT inside a PlPgSQL function?"
   (let* ((last-start (sql-postgres-last-func-decl))
 	 (last-end (sql-postgres-last-func-end))
 	 (next-end (sql-postgres-next-func-end))
@@ -52,7 +53,8 @@
 		   (and (not last-end)
 			(< last-start (point))
 			(<= (point) next-end))
-		   (and (< last-end last-start (point))
+		   (and last-end
+			(< last-end last-start (point))
 			(<= (point) next-end)))))
     in-func))
 
@@ -129,14 +131,18 @@ current values for the dynamic pointers around the function."
    :test (lambda (a b)
 	   (let ((B (cdr b)))
 	     (< a
-		(save-excursion
+		(save-excursion ; not only before B but before the extent of B
 		  (goto-char B)
 		  (goto-char
-		   (if (eq :end (car b))
-		       (line-beginning-position)
-		     (line-end-position)))))))))
+		   (cl-case (car b)
+		     (:end (line-beginning-position))
+		     (:begin (+ 1 (line-end-position)))))))))))
 
 (defun sql-postgres-in-function-structure-level (struct)
+  "How many levels of indent does POINT need in STRUCT?
+
+Given POINTs position in STRUCT, how many levels of indent deep
+is it?"
   (let* ((point-pos (sql-postgres-structure-position struct))
 	 (preceeding (cl-subseq struct 0 point-pos))
 	 (accumulator 0))
@@ -154,17 +160,9 @@ current values for the dynamic pointers around the function."
 	 sql-postgres-last-func-decl-point
 	 ;; and now set all these values locally
 	 (in-func? (sql-postgres-in-pl-p)))
-    (if (sql-postgres-in-line-comment-p)
-	'noindent
-      (if in-func?
-	  (let ((struct (sql-postgres-this-function-structure)))
-	    (cond
-	     ;; are we the last line of the func?
-	     ((equal (point) sql-postgres-next-func-end-point)
-	      (sql-postgres-indent-to 0))
-
-	     (t ; then ...
-	      (sql-postgres-indent-to
-	       (* 4 (sql-postgres-in-function-structure-level struct))))))))))
+    (if in-func?
+	(let ((struct (sql-postgres-this-function-structure)))
+	  (sql-postgres-indent-to
+	   (* 4 (sql-postgres-in-function-structure-level struct)))))))
 
 ;;; sql-postgres.el ends here
