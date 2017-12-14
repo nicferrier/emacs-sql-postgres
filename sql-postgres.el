@@ -1,4 +1,31 @@
-;;; derived mode for indent
+;;; sql-postgres.el --- postgres indentation for sql-mode
+
+;; Copyright (C) 2017  Nic Ferrier
+
+;; Author: Nic Ferrier <nic@ferrier.me.uk>
+;; Keywords: lisp
+;; Version: 0.0.1
+;; Url: https://github.com/nicferrier/sql-postgres
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+
+;; This provides indentation for plpgsql code.
+
+;;; Code:
+
 (require 'cl)
 
 ;; These values are all set by their equivalent function
@@ -8,6 +35,7 @@
 (defvar sql-postgres-last-func-decl-point nil)
 
 (defun sql-postgres-last-func-end ()
+  "Find the position of the last function end."
   (setq sql-postgres-last-func-end-point
 	(save-excursion
 	  (re-search-backward
@@ -16,6 +44,7 @@
 	   t))))
 
 (defun sql-postgres-next-func-end ()
+  "Find the position of the next function end."
   (setq sql-postgres-next-func-end-point
 	(save-excursion
 	  (re-search-forward
@@ -25,6 +54,7 @@
 	  (match-beginning 0))))
 
 (defun sql-postgres-last-func-decl ()
+  "Find the position of the last function start."
   (setq
    sql-postgres-last-func-decl-point
    (save-excursion
@@ -58,12 +88,11 @@
 			(<= (point) next-end)))))
     in-func))
 
-(defun sql-postgres-in-line-comment-p ()
-  (save-excursion
-    (goto-char (line-beginning-position))
-    (looking-at "^[ \t]*--")))
-
 (defun sql-postgres-indent-to (level)
+  "Construct indentation for LEVEL."
+  ;; FIXME - I'm sure this is wrong because it just uses spaces and it
+  ;; should be tabs and spaces or spaces or whatever. Emacs probably
+  ;; has a thing for this that I don't know about.
   (let* ((indent-str (make-string level ? )))
     (save-excursion
       (goto-char (line-beginning-position))
@@ -148,6 +177,7 @@ is it?"
     accumulator))
 
 (defun sql-postgres-in-paren-offset (ppss base-indent)
+  "Work out the offset of the line based on PPSS and BASE-INDENT."
   (let* ((start-of-list (elt ppss 1))
 	 (start-of-list-eol (save-excursion
 			      (goto-char start-of-list)
@@ -187,5 +217,7 @@ is it?"
  (lambda ()
    (sql-highlight-postgres-keywords)
    (setq indent-line-function 'sql-postgres-indent)))
+
+(provide 'sql-postgres)
 
 ;;; sql-postgres.el ends here
