@@ -74,43 +74,37 @@
 	;; else
 	(replace-match indent-str nil nil nil 1)))))
 
-(defun sql-postgres-list-begins ()
-  "Find the BEGINs in the current function.
+(defun sql-postgres-struct-begins (limit-point)
+  "Find where things begin in the current function before LIMIT-POINT."
+  (let ((regex "^[ \t]*\\(begin\\|if[ \t]+.*[ \t]+then\\)$"))
+    (save-excursion
+      (let (results
+	    (begin-pt
+	     (re-search-backward regex limit-point t)))
+	(while begin-pt
+	  (setq results (append results (list begin-pt)))
+	  (setq begin-pt
+		(re-search-backward regex limit-point t)))
+	(mapcar (lambda (r) (cons :begin r)) results)))))
 
-Relies on dynamic binding of SQL-POSTGRES-LAST-FUNC-DECL-POINT."
-  (save-excursion
-    (let (results
-	  (begin-pt
-	   (re-search-backward "^[ \t]*begin$"
-			       sql-postgres-last-func-decl-point t)))
-      (while begin-pt
-	(setq results (append results (list begin-pt)))
-	(setq begin-pt
-	      (re-search-backward "^[ \t]*begin$"
-				  sql-postgres-last-func-decl-point t)))
-      (mapcar (lambda (r) (cons :begin r)) results))))
-
-(defun sql-postgres-list-ends ()
-  "Find the ENDs in the current function.
-
-Relies on dynamic binding of SQL-POSTGRES-LAST-FUNC-DECL-POINT."
-  (save-excursion
-    (let (results
-	  (end-pt
-	   (re-search-backward "^[ \t]*end;$"
-			       sql-postgres-last-func-decl-point t)))
-      (while end-pt
-	(setq results (append results (list end-pt)))
-	(setq end-pt
-	      (re-search-backward "^[ \t]*end;$"
-				  sql-postgres-last-func-decl-point t)))
-      (mapcar (lambda (r) (cons :end r)) results))))
+(defun sql-postgres-struct-ends (limit-point)
+  "Find where structs end in the current function before LIMIT-POINT."
+  (let ((regex "^[ \t]*\\(end\\|end[ \t]+if\\);$"))
+    (save-excursion
+      (let (results
+	    (end-pt
+	     (re-search-backward regex limit-point t)))
+	(while end-pt
+	  (setq results (append results (list end-pt)))
+	  (setq end-pt
+		(re-search-backward regex limit-point t)))
+	(mapcar (lambda (r) (cons :end r)) results)))))
 
 (defun sql-postgres-list-structure ()
   "List the structure (BEGINs and ENDs) of plpgsql."
   (sort
-   (append (sql-postgres-list-begins)
-	   (sql-postgres-list-ends))
+   (append (sql-postgres-struct-begins sql-postgres-last-func-decl-point)
+	   (sql-postgres-struct-ends sql-postgres-last-func-decl-point))
    (lambda (a b)
      (< (cdr a) (cdr b)))))
 
@@ -123,10 +117,10 @@ current values for the dynamic pointers around the function."
     (goto-char sql-postgres-next-func-end-point)
     (sql-postgres-list-structure)))
 
-(defun sql-postgres-structure-position (structure)
-  "What position in the function STRUCTURE is POINT?"
+(defun sql-postgres-structure-position (structure pt)
+  "What position in the function STRUCTURE is point PT?"
   (cl-position
-   (point)
+   pt
    structure
    :test (lambda (a b)
 	   (let ((B (cdr b)))
@@ -143,7 +137,7 @@ current values for the dynamic pointers around the function."
 
 Given POINTs position in STRUCT, how many levels of indent deep
 is it?"
-  (let* ((point-pos (sql-postgres-structure-position struct))
+  (let* ((point-pos (sql-postgres-structure-position struct (point)))
 	 (preceeding (cl-subseq struct 0 point-pos))
 	 (accumulator 0))
     (mapc (lambda (e)
@@ -153,6 +147,20 @@ is it?"
 	  preceeding)
     accumulator))
 
+(defun sql-postgres-in-paren-offset (ppss base-indent)
+  (let* ((start-of-list (elt ppss 1))
+	 (start-of-list-eol (save-excursion
+			      (goto-char start-of-list)
+			      (line-end-position))))
+    (if (and
+	 (< start-of-list (point))
+	 (<= (point) start-of-list-eol))
+	base-indent
+      ;; else
+      (save-excursion
+	(goto-char start-of-list)
+	(+ 1 (- start-of-list (line-beginning-position)))))))
+
 (defun sql-postgres-indent ()
   "Indent postgresql including plpgsql."
   (let* (sql-postgres-last-func-end-point
@@ -161,8 +169,17 @@ is it?"
 	 ;; and now set all these values locally
 	 (in-func? (sql-postgres-in-pl-p)))
     (if in-func?
-	(let ((struct (sql-postgres-this-function-structure)))
-	  (sql-postgres-indent-to
-	   (* 4 (sql-postgres-in-function-structure-level struct)))))))
+	(let* ((struct (sql-postgres-this-function-structure))
+	       (func-level (* 4 (sql-postgres-in-function-structure-level struct)))
+	       (ppss (syntax-ppss (line-beginning-position)))
+	       (in-paren-depth (car ppss)))
+	  (if (> in-paren-depth 0) ; inside some sort of list
+	      (let ((list-offset (sql-postgres-in-paren-offset ppss func-level)))
+		(sql-postgres-indent-to list-offset))
+	    ;; else
+	    (progn
+	      (sql-postgres-indent-to func-level)
+	      (when (looking-at "^[ \t]+$")
+		(goto-char (line-end-position)))))))))
 
 ;;; sql-postgres.el ends here
