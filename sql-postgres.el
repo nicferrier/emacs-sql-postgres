@@ -182,4 +182,10 @@ is it?"
 	      (when (looking-at "^[ \t]+$")
 		(goto-char (line-end-position)))))))))
 
+(add-hook
+ 'sql-mode-hook
+ (lambda ()
+   (sql-highlist-postgres-keywords)
+   (setq indent-line-function 'sql-postgres-indent)))
+
 ;;; sql-postgres.el ends here
